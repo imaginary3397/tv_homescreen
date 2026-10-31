@@ -78,20 +78,15 @@ Tryck på ▶ igen efter en ändring. Då installeras den nya versionen.
 
 Apparna hittas på sitt namn. Om någon favorit inte syns beror det på att namnet på tv:n inte matchar sökorden i `FAVORITES`. Titta på vad appen heter under **Alla appar** och lägg till det namnet som sökord.
 
-## Nya bakgrundsklipp
+## Bakgrundsklippen
 
-Två klipp är inbyggda i appen. Om du vill använda fler kan du lägga dem direkt på tv:n, utan att bygga om appen:
+Klippen ligger i mappen `klipp/` i repot. De spelas i namnordning, `01_…`, `02_…` och så vidare, och slingan börjar om när den sista har spelats.
 
-```
-.\adb push C:\Klipp\nytt-klipp.mp4 /sdcard/Android/data/se.hemma.startskarm/files/videos/
-```
+**Lägga till ett klipp:** ladda upp filen till mappen `klipp` på GitHub (Add file → Upload files) med ett namn som styr var i ordningen den hamnar. När bygget är klart hämtar du den nya versionen med Downloader. Ljudet tas bort, bilden skalas ner till högst 1920 px och tonningar läggs på automatiskt. Det behöver du inte göra själv.
 
-Så fort det finns minst ett klipp i den mappen används bara klippen där. Lägg alltså dit de inbyggda också om du vill ha kvar dem. De finns i `app/src/main/res/raw/`.
+**Säsongsklipp:** ett klipp med `halloween` i namnet spelas bara 24 oktober–1 november, till exempel `06b_halloween_pumpaasteroid.mp4`.
 
-Klippen fungerar bäst om de är:
-- 720p eller 1080p, i H.264 (mp4)
-- utan ljud
-- med en kort uttoning till svart i början och slutet, så att bytet mellan klippen blir mjukt
+**Prova utan att bygga om:** filer i `/sdcard/Android/data/se.hemma.startskarm/files/videos/` på tv:n används i stället för de inbyggda, så länge det ligger minst en fil där.
 
 ## Bra att veta
 

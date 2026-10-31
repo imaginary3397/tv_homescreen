@@ -1,38 +1,50 @@
 package se.hemma.startskarm;
 
 import android.content.Context;
+import android.content.res.AssetFileDescriptor;
 import android.graphics.SurfaceTexture;
 import android.media.MediaPlayer;
-import android.net.Uri;
 import android.view.Surface;
 import android.view.TextureView;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
-import java.util.Random;
 
 /**
- * Spelar bakgrundsklippen ljudlöst, ett i taget i slumpad ordning.
+ * Spelar bakgrundsklippen ljudlöst, ett i taget, i namnordning (01_…, 02_… osv.) och börjar om
+ * när sista klippet spelats.
  *
- * Klippen hämtas i första hand från mappen
+ * Klippen ligger inbyggda i appen (assets/videos, skapas från mappen klipp/ i repot när appen byggs).
+ * Finns det .mp4-filer i mappen
  *   /sdcard/Android/data/se.hemma.startskarm/files/videos/
- * (dit kan nya .mp4-filer läggas med adb push, utan att appen byggs om).
- * Finns inga klipp där används de som är inbyggda i appen (res/raw).
+ * används de i stället, så att klipp kan provas utan att bygga om appen.
  *
- * Obs: skärmen hålls INTE vaken medan videon spelas, så tv:ns skärmsläckare
- * startar som vanligt.
+ * Säsongsklipp: ett klipp med "halloween" i namnet spelas bara 24 oktober–1 november.
+ *
+ * Obs: skärmen hålls INTE vaken medan videon spelas, så tv:ns skärmsläckare startar som vanligt.
  */
 final class BackgroundVideo implements TextureView.SurfaceTextureListener,
         MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener {
 
-    private static final int[] BUILT_IN = {R.raw.bg_isring, R.raw.bg_nebulosa};
+    private static final String ASSET_DIR = "videos";
+
+    /** Ett klipp: antingen en fil på tv:n eller en fil inbyggd i appen. */
+    private static final class Clip {
+        final String name;
+        final File file;
+
+        Clip(String name, File file) {
+            this.name = name;
+            this.file = file;
+        }
+    }
 
     private final Context context;
     private final TextureView view;
-    private final Random random = new Random();
 
     private MediaPlayer player;
     private Surface surface;
@@ -76,41 +88,74 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
         releasePlayer();
     }
 
-    private List<Uri> findClips() {
-        List<Uri> clips = new ArrayList<>();
+    /** Alla klipp som ska spelas just nu, sorterade efter namn. */
+    private List<Clip> findClips() {
+        List<Clip> clips = new ArrayList<>();
+
         File dir = context.getExternalFilesDir("videos");
         if (dir != null) {
             File[] files = dir.listFiles();
             if (files != null) {
-                Arrays.sort(files);
                 for (File f : files) {
-                    String n = f.getName().toLowerCase(Locale.ROOT);
-                    if (f.isFile() && (n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".webm"))) {
-                        clips.add(Uri.fromFile(f));
-                    }
+                    if (f.isFile() && isVideo(f.getName())) clips.add(new Clip(f.getName(), f));
                 }
             }
         }
+
         if (clips.isEmpty()) {
-            for (int id : BUILT_IN) {
-                clips.add(Uri.parse("android.resource://" + context.getPackageName() + "/" + id));
+            try {
+                String[] names = context.getAssets().list(ASSET_DIR);
+                if (names != null) {
+                    for (String n : names) {
+                        if (isVideo(n)) clips.add(new Clip(n, null));
+                    }
+                }
+            } catch (Exception ignored) {
             }
         }
-        return clips;
+
+        List<Clip> active = new ArrayList<>();
+        boolean halloween = isHalloweenSeason();
+        for (Clip c : clips) {
+            boolean seasonal = c.name.toLowerCase(Locale.ROOT).contains("halloween");
+            if (!seasonal || halloween) active.add(c);
+        }
+        Collections.sort(active, (a, b) -> a.name.compareToIgnoreCase(b.name));
+        return active;
+    }
+
+    private static boolean isVideo(String name) {
+        String n = name.toLowerCase(Locale.ROOT);
+        return n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".webm");
+    }
+
+    /** 24 oktober till och med 1 november. */
+    private static boolean isHalloweenSeason() {
+        Calendar now = Calendar.getInstance();
+        int month = now.get(Calendar.MONTH);
+        int day = now.get(Calendar.DAY_OF_MONTH);
+        return (month == Calendar.OCTOBER && day >= 24) || (month == Calendar.NOVEMBER && day <= 1);
+    }
+
+    /** Nästa klipp i namnordning efter det senast spelade, annars det första. */
+    private Clip pickNext(List<Clip> clips) {
+        if (lastClip != null) {
+            for (Clip c : clips) {
+                if (c.name.compareToIgnoreCase(lastClip) > 0) return c;
+            }
+        }
+        return clips.get(0);
     }
 
     private void playNext() {
         releasePlayer();
         if (surface == null) return;
 
-        List<Uri> clips = findClips();
+        List<Clip> clips = findClips();
         if (clips.isEmpty()) return;
 
-        Uri next;
-        do {
-            next = clips.get(random.nextInt(clips.size()));
-        } while (clips.size() > 1 && next.toString().equals(lastClip));
-        lastClip = next.toString();
+        Clip next = pickNext(clips);
+        lastClip = next.name;
 
         MediaPlayer mp = new MediaPlayer();
         player = mp;
@@ -122,7 +167,13 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
             mp.setOnPreparedListener(p -> {
                 if (p == player && wantPlaying) p.start();
             });
-            mp.setDataSource(context, next);
+            if (next.file != null) {
+                mp.setDataSource(next.file.getAbsolutePath());
+            } else {
+                try (AssetFileDescriptor afd = context.getAssets().openFd(ASSET_DIR + "/" + next.name)) {
+                    mp.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
+                }
+            }
             mp.prepareAsync();
         } catch (Exception e) {
             releasePlayer();
