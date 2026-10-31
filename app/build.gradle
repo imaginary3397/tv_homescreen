@@ -1,0 +1,47 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'se.hemma.startskarm'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'se.hemma.startskarm'
+        minSdk 24
+        targetSdk 35
+        // Byggnumret från GitHub, så att varje ny version räknas som nyare
+        versionCode((System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int)
+        versionName "1.${System.getenv('GITHUB_RUN_NUMBER') ?: '0'}"
+    }
+
+    // Fast nyckel, så att nya versioner kan installeras ovanpå den gamla
+    signingConfigs {
+        fixed {
+            storeFile file('signing.keystore')
+            storePassword 'android'
+            keyAlias 'startskarm'
+            keyPassword 'android'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.fixed
+        }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.fixed
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
