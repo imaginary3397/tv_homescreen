@@ -5,9 +5,6 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.os.SystemClock;
 import android.view.KeyEvent;
 import android.provider.Settings;
 import android.util.TypedValue;
@@ -34,20 +31,6 @@ public class HomeActivity extends Activity {
     private final List<View> tiles = new ArrayList<>();
     private int lastFocused = 0;
 
-    /** Så här länge utan knapptryck spelas videon, sedan får skärmsläckaren ta över. */
-    private static final long IDLE_MS = 60_000;
-    private final Handler handler = new Handler(Looper.getMainLooper());
-    private long lastInteraction = SystemClock.uptimeMillis();
-    private final Runnable idleCheck = new Runnable() {
-        @Override
-        public void run() {
-            if (SystemClock.uptimeMillis() - lastInteraction >= IDLE_MS) {
-                showStill();
-            } else {
-                handler.postDelayed(this, 5_000);
-            }
-        }
-    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +38,8 @@ public class HomeActivity extends Activity {
         setContentView(R.layout.activity_home);
 
         video = new BackgroundVideo(this, (TextureView) findViewById(R.id.video));
+        // När hela slingan spelats utan knapptryck: visa en stillbild så att skärmsläckaren kan starta
+        video.setListener(this::showStill);
         still = findViewById(R.id.still);
         row = findViewById(R.id.app_row);
         focusedName = findViewById(R.id.focused_name);
@@ -88,7 +73,6 @@ public class HomeActivity extends Activity {
 
     @Override
     protected void onPause() {
-        handler.removeCallbacks(idleCheck);
         video.pause();
         super.onPause();
     }
@@ -118,7 +102,7 @@ public class HomeActivity extends Activity {
 
     /** Någon använder fjärrkontrollen: spela video och starta om nedräkningen. */
     private void userActive() {
-        lastInteraction = SystemClock.uptimeMillis();
+        video.resetLoop();
         video.start();
         if (still.getVisibility() == View.VISIBLE) {
             still.animate().cancel();
@@ -127,13 +111,10 @@ public class HomeActivity extends Activity {
                 still.setImageDrawable(null);
             }).start();
         }
-        handler.removeCallbacks(idleCheck);
-        handler.postDelayed(idleCheck, 5_000);
     }
 
     @Override
     protected void onDestroy() {
-        handler.removeCallbacks(idleCheck);
         video.release();
         super.onDestroy();
     }

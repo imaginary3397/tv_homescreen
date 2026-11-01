@@ -29,7 +29,7 @@ import java.util.Locale;
  * Säsongsklipp: ett klipp med "halloween" i namnet spelas bara 24 oktober–1 november.
  *
  * Obs: Sonys tv räknar pågående video som aktivitet. Därför stoppar HomeActivity videon när
- * fjärrkontrollen inte rörts på en minut och visar en stillbild i stället (assets/stills, tas fram
+ * hela slingan spelats en gång utan att fjärrkontrollen rörts, och visar en stillbild i stället (assets/stills, tas fram
  * ur klippen när appen byggs), så att tv:ns skärmsläckare kan starta.
  */
 final class BackgroundVideo implements TextureView.SurfaceTextureListener,
@@ -48,8 +48,16 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
         }
     }
 
+    /** Anropas när hela slingan har spelats en gång sedan resetLoop(). */
+    interface Listener {
+        void onLoopFinished();
+    }
+
     private final Context context;
     private final TextureView view;
+    private Listener listener;
+    private int playedSinceReset;
+    private int clipCount;
 
     private MediaPlayer player;
     private Surface surface;
@@ -62,6 +70,15 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
         view.setSurfaceTextureListener(this);
         // Skapar mappen för egna klipp om den inte finns
         context.getExternalFilesDir("videos");
+    }
+
+    void setListener(Listener listener) {
+        this.listener = listener;
+    }
+
+    /** Någon har tryckt på fjärrkontrollen: räkna slingan från början igen. */
+    void resetLoop() {
+        playedSinceReset = 0;
     }
 
     void start() {
@@ -185,6 +202,8 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
 
         Clip next = pickNext(clips);
         lastClip = next.name;
+        clipCount = clips.size();
+        playedSinceReset++;
 
         MediaPlayer mp = new MediaPlayer();
         player = mp;
@@ -228,7 +247,9 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
     @Override
     public void onCompletion(MediaPlayer mp) {
         if (mp != player) return;
-        if (wantPlaying) {
+        if (wantPlaying && listener != null && playedSinceReset >= clipCount) {
+            listener.onLoopFinished();
+        } else if (wantPlaying) {
             playNext();
         } else {
             releasePlayer();
