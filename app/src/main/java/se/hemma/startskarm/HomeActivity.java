@@ -5,6 +5,10 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
+import android.view.KeyEvent;
 import android.provider.Settings;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -28,6 +32,21 @@ public class HomeActivity extends Activity {
     private TextView focusedName;
     private final List<View> tiles = new ArrayList<>();
     private int lastFocused = 0;
+
+    /** Så här länge utan knapptryck spelas videon, sedan får skärmsläckaren ta över. */
+    private static final long IDLE_MS = 60_000;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private long lastInteraction = SystemClock.uptimeMillis();
+    private final Runnable idleCheck = new Runnable() {
+        @Override
+        public void run() {
+            if (SystemClock.uptimeMillis() - lastInteraction >= IDLE_MS) {
+                video.finishAndStop();
+            } else {
+                handler.postDelayed(this, 5_000);
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,18 +80,34 @@ public class HomeActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        video.start();
+        userActive();
         focusTile(lastFocused);
     }
 
     @Override
     protected void onPause() {
+        handler.removeCallbacks(idleCheck);
         video.pause();
         super.onPause();
     }
 
     @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) userActive();
+        return super.dispatchKeyEvent(event);
+    }
+
+    /** Någon använder fjärrkontrollen: spela video och starta om nedräkningen. */
+    private void userActive() {
+        lastInteraction = SystemClock.uptimeMillis();
+        video.start();
+        handler.removeCallbacks(idleCheck);
+        handler.postDelayed(idleCheck, 5_000);
+    }
+
+    @Override
     protected void onDestroy() {
+        handler.removeCallbacks(idleCheck);
         video.release();
         super.onDestroy();
     }
@@ -81,7 +116,7 @@ public class HomeActivity extends Activity {
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         // Pausa när något annat ligger över, t.ex. skärmsläckaren
-        if (hasFocus) video.start();
+        if (hasFocus) userActive();
         else video.pause();
     }
 

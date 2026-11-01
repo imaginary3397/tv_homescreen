@@ -25,7 +25,8 @@ import java.util.Locale;
  *
  * Säsongsklipp: ett klipp med "halloween" i namnet spelas bara 24 oktober–1 november.
  *
- * Obs: skärmen hålls INTE vaken medan videon spelas, så tv:ns skärmsläckare startar som vanligt.
+ * Obs: Sonys tv räknar pågående video som aktivitet. Därför stoppar HomeActivity videon när
+ * fjärrkontrollen inte rörts på en minut, så att tv:ns skärmsläckare kan starta.
  */
 final class BackgroundVideo implements TextureView.SurfaceTextureListener,
         MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener {
@@ -49,6 +50,7 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
     private MediaPlayer player;
     private Surface surface;
     private boolean wantPlaying;
+    private boolean stopAfterCurrent;
     private String lastClip;
 
     BackgroundVideo(Context context, TextureView view) {
@@ -61,6 +63,7 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
 
     void start() {
         wantPlaying = true;
+        stopAfterCurrent = false;
         if (surface == null) return;
         if (player == null) {
             playNext();
@@ -81,6 +84,18 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
             } catch (IllegalStateException ignored) {
             }
         }
+    }
+
+    /**
+     * Låter det klipp som spelas ta slut och startar inget nytt.
+     * Används när ingen rört fjärrkontrollen på ett tag, så att tv:ns skärmsläckare kan starta.
+     */
+    void finishAndStop() {
+        stopAfterCurrent = true;
+    }
+
+    boolean isStopping() {
+        return stopAfterCurrent;
     }
 
     void release() {
@@ -182,7 +197,7 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
     }
 
     private void retry() {
-        if (wantPlaying && player == null) playNext();
+        if (wantPlaying && !stopAfterCurrent && player == null) playNext();
     }
 
     private void releasePlayer() {
@@ -199,7 +214,7 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
     @Override
     public void onCompletion(MediaPlayer mp) {
         if (mp != player) return;
-        if (wantPlaying) {
+        if (wantPlaying && !stopAfterCurrent) {
             playNext();
         } else {
             releasePlayer();
