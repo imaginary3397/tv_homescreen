@@ -28,6 +28,7 @@ import java.util.List;
 public class HomeActivity extends Activity {
 
     private BackgroundVideo video;
+    private ImageView still;
     private LinearLayout row;
     private TextView focusedName;
     private final List<View> tiles = new ArrayList<>();
@@ -41,7 +42,7 @@ public class HomeActivity extends Activity {
         @Override
         public void run() {
             if (SystemClock.uptimeMillis() - lastInteraction >= IDLE_MS) {
-                video.finishAndStop();
+                showStill();
             } else {
                 handler.postDelayed(this, 5_000);
             }
@@ -54,6 +55,7 @@ public class HomeActivity extends Activity {
         setContentView(R.layout.activity_home);
 
         video = new BackgroundVideo(this, (TextureView) findViewById(R.id.video));
+        still = findViewById(R.id.still);
         row = findViewById(R.id.app_row);
         focusedName = findViewById(R.id.focused_name);
 
@@ -97,10 +99,34 @@ public class HomeActivity extends Activity {
         return super.dispatchKeyEvent(event);
     }
 
+    /** Ingen har rört fjärrkontrollen på ett tag: tona över till en stillbild och stoppa videon. */
+    private void showStill() {
+        android.graphics.Bitmap b = video.randomStill();
+        if (b == null) {
+            video.stopNow();
+            return;
+        }
+        still.setImageBitmap(b);
+        still.animate().cancel();
+        still.setAlpha(0f);
+        still.setVisibility(View.VISIBLE);
+        still.animate().alpha(1f).setDuration(1500).withEndAction(() -> {
+            // Bara om ingen tryckt på något under övertoningen
+            if (still.getAlpha() >= 1f) video.stopNow();
+        }).start();
+    }
+
     /** Någon använder fjärrkontrollen: spela video och starta om nedräkningen. */
     private void userActive() {
         lastInteraction = SystemClock.uptimeMillis();
         video.start();
+        if (still.getVisibility() == View.VISIBLE) {
+            still.animate().cancel();
+            still.animate().alpha(0f).setDuration(1200).withEndAction(() -> {
+                still.setVisibility(View.GONE);
+                still.setImageDrawable(null);
+            }).start();
+        }
         handler.removeCallbacks(idleCheck);
         handler.postDelayed(idleCheck, 5_000);
     }

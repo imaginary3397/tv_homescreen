@@ -4,8 +4,9 @@
 set -euo pipefail
 IN="${1:-klipp}"
 OUT="${2:-app/src/main/assets/videos}"
+STILLS="${3:-app/src/main/assets/stills}"
 FADE=1.2
-mkdir -p "$OUT"
+mkdir -p "$OUT" "$STILLS"
 shopt -s nullglob nocaseglob
 for f in "$IN"/*.mp4 "$IN"/*.mov "$IN"/*.webm; do
   name=$(basename "$f")
@@ -18,4 +19,7 @@ for f in "$IN"/*.mp4 "$IN"/*.mov "$IN"/*.webm; do
     -vf "scale='min(1920,iw)':-2,fade=t=in:st=0:d=$FADE,fade=t=out:st=$out_start:d=$FADE,format=yuv420p" \
     -c:v libx264 -profile:v main -level 4.0 -preset slow -crf 19 -movflags +faststart \
     "$OUT/$name.mp4"
+  # Stillbild från mitten av klippet, visas när ingen rört fjärrkontrollen på ett tag
+  mid=$(awk -v d="$dur" 'BEGIN{printf "%.2f", d/2}')
+  ffmpeg -v error -y -ss "$mid" -i "$f" -frames:v 1 -vf "scale='min(1920,iw)':-2" -q:v 3 "$STILLS/$name.jpg"
 done

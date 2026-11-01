@@ -4,3 +4,4 @@ local.properties
 .idea/
 *.iml
 app/src/main/assets/videos/
+app/src/main/assets/stills/

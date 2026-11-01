@@ -2,12 +2,15 @@ package se.hemma.startskarm;
 
 import android.content.Context;
 import android.content.res.AssetFileDescriptor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.SurfaceTexture;
 import android.media.MediaPlayer;
 import android.view.Surface;
 import android.view.TextureView;
 
 import java.io.File;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -26,7 +29,8 @@ import java.util.Locale;
  * Säsongsklipp: ett klipp med "halloween" i namnet spelas bara 24 oktober–1 november.
  *
  * Obs: Sonys tv räknar pågående video som aktivitet. Därför stoppar HomeActivity videon när
- * fjärrkontrollen inte rörts på en minut, så att tv:ns skärmsläckare kan starta.
+ * fjärrkontrollen inte rörts på en minut och visar en stillbild i stället (assets/stills, tas fram
+ * ur klippen när appen byggs), så att tv:ns skärmsläckare kan starta.
  */
 final class BackgroundVideo implements TextureView.SurfaceTextureListener,
         MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener {
@@ -50,7 +54,6 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
     private MediaPlayer player;
     private Surface surface;
     private boolean wantPlaying;
-    private boolean stopAfterCurrent;
     private String lastClip;
 
     BackgroundVideo(Context context, TextureView view) {
@@ -63,7 +66,6 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
 
     void start() {
         wantPlaying = true;
-        stopAfterCurrent = false;
         if (surface == null) return;
         if (player == null) {
             playNext();
@@ -87,15 +89,27 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
     }
 
     /**
-     * Låter det klipp som spelas ta slut och startar inget nytt.
-     * Används när ingen rört fjärrkontrollen på ett tag, så att tv:ns skärmsläckare kan starta.
+     * Stoppar videon helt (släpper avkodaren), så att tv:ns skärmsläckare kan starta.
+     * Nästa start() fortsätter med nästa klipp i ordningen.
      */
-    void finishAndStop() {
-        stopAfterCurrent = true;
+    void stopNow() {
+        wantPlaying = false;
+        releasePlayer();
     }
 
-    boolean isStopping() {
-        return stopAfterCurrent;
+    /** En slumpad stillbild ur ett av klippen som spelas just nu, eller null om ingen finns. */
+    Bitmap randomStill() {
+        List<Clip> clips = findClips();
+        Collections.shuffle(clips);
+        for (Clip c : clips) {
+            String base = c.name.substring(0, c.name.lastIndexOf('.'));
+            try (InputStream in = context.getAssets().open("stills/" + base + ".jpg")) {
+                Bitmap b = BitmapFactory.decodeStream(in);
+                if (b != null) return b;
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
     }
 
     void release() {
@@ -197,7 +211,7 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
     }
 
     private void retry() {
-        if (wantPlaying && !stopAfterCurrent && player == null) playNext();
+        if (wantPlaying && player == null) playNext();
     }
 
     private void releasePlayer() {
@@ -214,7 +228,7 @@ final class BackgroundVideo implements TextureView.SurfaceTextureListener,
     @Override
     public void onCompletion(MediaPlayer mp) {
         if (mp != player) return;
-        if (wantPlaying && !stopAfterCurrent) {
+        if (wantPlaying) {
             playNext();
         } else {
             releasePlayer();

@@ -11,6 +11,15 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Stillbild som visas när ingen rört fjärrkontrollen på en minut -->
+    <ImageView
+        android:id="@+id/still"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
     <!-- Dämpning uppe och nere så att text och appar syns -->
     <View
         android:layout_width="match_parent"
